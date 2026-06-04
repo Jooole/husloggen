@@ -11,6 +11,8 @@ function App() {
   const [selectedProject, setSelectedProject] = useState(null); // Håller det projekt som visas i modalen
   const [isModalActive, setIsModalActive] = useState(false);
   const [modalOrigin, setModalOrigin] = useState(null); // Sparar { top, left, width, height } för kortet du klickade på
+  const [isEditing, setIsEditing] = useState(false); // Håller koll på om vi är i redigeringsläge
+  const [editFields, setEditFields] = useState({ name: "", cost: "", date: "", category: "", description: "" }); // Håller temporär data under redigeringen
 
   // Håller koll på om underhållsmenyn i headern är öppen
   const [showMaintenanceDropdown, setShowMaintenanceDropdown] = useState(false);
@@ -117,6 +119,32 @@ function App() {
       await updateDoc(taskRef, {
         isCompleted: !task.isCompleted
       });
+    }
+  };
+
+  // --- FUNKTION FÖR ATT UPPDATERA ETT BEFINTLIGT PROJEKT ---
+  const handleUpdateProject = async () => {
+    if (!editFields.name || !editFields.date) {
+      alert("Titel och datum får inte vara tomma!");
+      return;
+    }
+
+    try {
+      const projectRef = doc(db, "projects", selectedProject.id);
+      await updateDoc(projectRef, {
+        name: editFields.name,
+        cost: Number(editFields.cost) || 0,
+        date: editFields.date,
+        category: editFields.category,
+        description: editFields.description
+      });
+      
+      // Stäng redigeringsläget och uppdatera modalens visningstext
+      setIsEditing(false);
+      setSelectedProject({ id: selectedProject.id, ...editFields, cost: Number(editFields.cost) || 0 });
+    } catch (error) {
+      console.error("Fel vid uppdatering:", error);
+      alert("Kunde inte spara ändringarna.");
     }
   };
 
@@ -773,7 +801,7 @@ function App() {
               Projekt ({filteredProjects.length})
             </p>
             
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0px' }}>
               {filteredProjects.length > 0 ? (
                 filteredProjects.map(project => (
                   <div 
@@ -781,6 +809,17 @@ function App() {
                     onClick={(e) => {
                       const rect = e.currentTarget.getBoundingClientRect();
                       setModalOrigin({ top: rect.top, left: rect.left, width: rect.width, height: rect.height });
+                      
+                      // Ladda in projektets nuvarande värden i redigeringsfälten
+                      setEditFields({
+                        name: project.name,
+                        cost: project.cost,
+                        date: project.date,
+                        category: project.category,
+                        description: project.description || ""
+                      });
+                      setIsEditing(false); // Säkerställ att vi startar i visningsläge
+                      
                       setSelectedProject(project);
                       setTimeout(() => setIsModalActive(true), 20);
                     }} 
@@ -896,44 +935,145 @@ function App() {
 
             {/* MODALENS INNEHÅLL (Inramat i en fade-in-effekt) */}
             <div style={{ opacity: isModalActive ? 1 : 0, transition: 'opacity 0.2s', display: 'flex', flexDirection: 'column', gap: '14px', height: '100%' }}>
-              <div>
-                <span style={{ fontSize: '11px', fontWeight: 'bold', textTransform: 'uppercase', color: '#2563eb', letterSpacing: '0.5px' }}>
-                  {selectedProject.category || 'Projekt'}
-                </span>
-                <h3 style={{ fontSize: '20px', fontWeight: 'bold', margin: '4px 0 0 0', color: '#1f2937', paddingRight: '20px' }}>
-                  {selectedProject.name}
-                </h3>
-              </div>
+              {isEditing ? (
+                /* --- HÄR VISAS INPUTS OM VI REDIGERAR --- */
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', overflowY: 'auto', paddingRight: '4px' }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                    <label style={{ fontSize: '11px', fontWeight: 'bold', color: '#6b7280' }}>Kategori</label>
+                    <select 
+                      value={editFields.category}
+                      onChange={(e) => setEditFields({ ...editFields, category: e.target.value })}
+                      style={{ padding: '8px', borderRadius: '8px', border: '1px solid #d1d5db', fontSize: '14px', backgroundColor: '#fff' }}
+                    >
+                      <option value="Renovering">Renovering</option>
+                      <option value="Nybyggnation">Nybyggnation</option>
+                      <option value="Trädgård">Trädgård</option>
+                      <option value="Mindre fix">Mindre fix</option>
+                      <option value="Annat">Annat</option>
+                    </select>
+                  </div>
 
-              <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1px solid #f3f4f6', borderBottom: '1px solid #f3f4f6', padding: '10px 0' }}>
-                <div>
-                  <span style={{ fontSize: '11px', color: '#6b7280' }}>Datum</span>
-                  <div style={{ fontSize: '14px', fontWeight: '500', color: '#374151' }}>{selectedProject.date}</div>
-                </div>
-                <div style={{ textAlign: 'right' }}>
-                  <span style={{ fontSize: '11px', color: '#6b7280' }}>Kostnad</span>
-                  <div style={{ fontSize: '14px', fontWeight: 'bold', color: '#10b981' }}>
-                    {(selectedProject.cost || 0).toLocaleString()} kr
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                    <label style={{ fontSize: '11px', fontWeight: 'bold', color: '#6b7280' }}>Namn</label>
+                    <input 
+                      type="text"
+                      value={editFields.name}
+                      onChange={(e) => setEditFields({ ...editFields, name: e.target.value })}
+                      style={{ padding: '8px', borderRadius: '8px', border: '1px solid #d1d5db', fontSize: '14px' }}
+                    />
+                  </div>
+
+                  <div style={{ display: 'flex', gap: '10px' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', flex: 1 }}>
+                      <label style={{ fontSize: '11px', fontWeight: 'bold', color: '#6b7280' }}>Datum</label>
+                      <input 
+                        type="date"
+                        value={editFields.date}
+                        onChange={(e) => setEditFields({ ...editFields, date: e.target.value })}
+                        style={{ padding: '8px', borderRadius: '8px', border: '1px solid #d1d5db', fontSize: '14px', fontFamily: 'sans-serif' }}
+                      />
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', flex: 1 }}>
+                      <label style={{ fontSize: '11px', fontWeight: 'bold', color: '#6b7280' }}>Kostnad (kr)</label>
+                      <input 
+                        type="number"
+                        value={editFields.cost}
+                        onChange={(e) => setEditFields({ ...editFields, cost: e.target.value })}
+                        style={{ padding: '8px', borderRadius: '8px', border: '1px solid #d1d5db', fontSize: '14px' }}
+                      />
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                    <label style={{ fontSize: '11px', fontWeight: 'bold', color: '#6b7280' }}>Beskrivning</label>
+                    <textarea 
+                      value={editFields.description}
+                      onChange={(e) => setEditFields({ ...editFields, description: e.target.value })}
+                      rows={3}
+                      style={{ padding: '8px', borderRadius: '8px', border: '1px solid #d1d5db', fontSize: '14px', fontFamily: 'sans-serif', resize: 'none' }}
+                    />
                   </div>
                 </div>
-              </div>
+              ) : (
+                /* --- HÄR VISAS DEN VANLIGA TEXTEN SOM VANLIGT --- */
+                <>
+                  <div>
+                    <span style={{ fontSize: '11px', fontWeight: 'bold', textTransform: 'uppercase', color: '#2563eb', letterSpacing: '0.5px' }}>
+                      {selectedProject.category || 'Projekt'}
+                    </span>
+                    <h3 style={{ fontSize: '20px', fontWeight: 'bold', margin: '4px 0 0 0', color: '#1f2937', paddingRight: '20px' }}>
+                      {selectedProject.name}
+                    </h3>
+                  </div>
 
-              {/* BESKRIVNING */}
-              <div style={{ flex: 1, minHeight: 0 }}>
-                <span style={{ fontSize: '11px', color: '#6b7280', fontWeight: '600' }}>Beskrivning</span>
-                <p style={{ 
-                  fontSize: '14px', 
-                  color: selectedProject.description ? '#4b5563' : '#9ca3af', 
-                  margin: '4px 0 0 0', 
-                  lineHeight: '1.5',
-                  fontStyle: selectedProject.description ? 'normal' : 'italic',
-                  backgroundColor: '#f9fafb',
-                  padding: '10px',
-                  borderRadius: '8px',
-                  whiteSpace: 'pre-wrap'
-                }}>
-                  {selectedProject.description || 'Ingen beskrivning angiven för detta projekt.'}
-                </p>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1px solid #f3f4f6', borderBottom: '1px solid #f3f4f6', padding: '10px 0' }}>
+                    <div>
+                      <span style={{ fontSize: '11px', color: '#6b7280' }}>Datum</span>
+                      <div style={{ fontSize: '14px', fontWeight: '500', color: '#374151' }}>{selectedProject.date}</div>
+                    </div>
+                    <div style={{ textAlign: 'right' }}>
+                      <span style={{ fontSize: '11px', color: '#6b7280' }}>Kostnad</span>
+                      <div style={{ fontSize: '14px', fontWeight: 'bold', color: '#10b981' }}>
+                        {(selectedProject.cost || 0).toLocaleString()} kr
+                      </div>
+                    </div>
+                  </div>
+
+                  <div style={{ flex: 1, minHeight: 0 }}>
+                    <span style={{ fontSize: '11px', color: '#6b7280', fontWeight: '600' }}>Beskrivning</span>
+                    <p style={{ 
+                      fontSize: '14px', 
+                      color: selectedProject.description ? '#4b5563' : '#9ca3af', 
+                      margin: '4px 0 0 0', 
+                      lineHeight: '1.5',
+                      fontStyle: selectedProject.description ? 'normal' : 'italic',
+                      backgroundColor: '#f9fafb',
+                      padding: '10px',
+                      borderRadius: '8px',
+                      whiteSpace: 'pre-wrap'
+                    }}>
+                      {selectedProject.description || 'Ingen beskrivning angiven för detta projekt.'}
+                    </p>
+                  </div>
+                </>
+              )}
+
+              {/* --- VERKTYGSKNAPPAR I FOOTERN --- */}
+              <div style={{ display: 'flex', gap: '10px', marginTop: 'auto', paddingTop: '10px', borderTop: '1px solid #f3f4f6' }}>
+                {isEditing ? (
+                  <>
+                    <button 
+                      onClick={() => setIsEditing(false)}
+                      style={{ flex: 1, padding: '10px', borderRadius: '8px', border: '1px solid #d1d5db', backgroundColor: '#fff', color: '#4b5563', fontSize: '14px', fontWeight: 'bold', cursor: 'pointer' }}
+                    >
+                      Avbryt
+                    </button>
+                    <button 
+                      onClick={handleUpdateProject}
+                      style={{ flex: 1, padding: '10px', borderRadius: '8px', border: 'none', backgroundColor: '#10b981', color: '#fff', fontSize: '14px', fontWeight: 'bold', cursor: 'pointer' }}
+                    >
+                      Spara
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <button 
+                      onClick={() => {
+                        setIsModalActive(false);
+                        setTimeout(() => { setSelectedProject(null); setModalOrigin(null); }, 250);
+                      }}
+                      style={{ flex: 1, padding: '10px', borderRadius: '8px', border: '1px solid #d1d5db', backgroundColor: '#fff', color: '#4b5563', fontSize: '14px', fontWeight: 'bold', cursor: 'pointer' }}
+                    >
+                      Stäng
+                    </button>
+                    <button 
+                      onClick={() => setIsEditing(true)}
+                      style={{ flex: 1, padding: '10px', borderRadius: '8px', border: 'none', backgroundColor: '#2563eb', color: '#fff', fontSize: '14px', fontWeight: 'bold', cursor: 'pointer' }}
+                    >
+                      Redigera
+                    </button>
+                  </>
+                )}
               </div>
             </div>
 
