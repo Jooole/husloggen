@@ -1,7 +1,7 @@
 import React from 'react';
 import { Check, X, Calendar } from 'lucide-react'; // Hämtar snygga ikoner från Lucide
 
-function MaintenanceCard({ name, interval, dueDate, onSetStatus }) { 
+function MaintenanceCard({ name, interval, deadline, dueDate, onSetStatus }) { 
   return (
     <div style={{
       backgroundColor: '#fff',
@@ -22,7 +22,7 @@ function MaintenanceCard({ name, interval, dueDate, onSetStatus }) {
         </h4>
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#6b7280', fontSize: '12px' }}>
           <Calendar size={13} />
-          <span>Ska göras: {dueDate || interval}</span>
+          <span>{dueDate || interval || deadline || "Ej angivet"}</span>
         </div>
       </div>
 

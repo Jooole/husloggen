@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import ProjectCard from './ProjectCard';
 import MaintenanceCard from './MaintenanceCard'; // HÄMTAR NYA KOMPONENTEN!
-import { Bell, Home, FileText, Plus, AlertTriangle } from 'lucide-react';
+import { Bell, Home, FileText, Plus, AlertTriangle, Eye, EyeOff } from 'lucide-react';
 import { db } from './firebase'; // Hämtar din config!
 import { collection, onSnapshot, addDoc, doc, updateDoc, deleteDoc } from 'firebase/firestore'; // Hämtar Firestore-metoder!
 
@@ -16,6 +16,8 @@ function App() {
 
   // Håller koll på om underhållsmenyn i headern är öppen
   const [showMaintenanceDropdown, setShowMaintenanceDropdown] = useState(false);
+  // Håller koll på om ekonomisiffrorna ska visas eller döljas på hemskärmen
+  const [showFinancials, setShowFinancials] = useState(false); // Startar som dold för maximal säkerhet!
 
   // --- STATES FÖR FORMULÄRET ---
   const [newName, setNewName] = useState("");
@@ -244,7 +246,36 @@ function App() {
       projectsPerYear[year] = (projectsPerYear[year] || 0) + 1;
     }
   });
-  const yearStatsString = Object.entries(projectsPerYear).sort((a, b) => b[0] - a[0]).map(([y, c]) => `${y}: ${c}`).join('  |  ');
+
+  // Sortera åren kronologiskt för x-axeln (t.ex. 2024, 2025, 2026)
+  const sortedYearData = Object.entries(projectsPerYear)
+    .sort((a, b) => Number(a[0]) - Number(b[0]));
+
+  // Hitta det högsta antalet projekt ett enskilt år för att skala Y-axeln dynamiskt
+  const maxProjectsInAYear = sortedYearData.length > 0 
+    ? Math.max(...sortedYearData.map(([_, count]) => count)) 
+    : 1;
+
+  // Diagrammets fasta dimensioner i pixlar (anpassas på skärmen via viewBox)
+  const svgWidth = 320;
+  const svgHeight = 120;
+  const paddingX = 30;
+  const paddingY = 20;
+
+  // Räkna ut X- och Y-koordinater för varje år och spara i en array av punkter
+  const chartPoints = sortedYearData.map(([year, count], index) => {
+    const x = sortedYearData.length > 1 
+      ? paddingX + (index * (svgWidth - paddingX * 2) / (sortedYearData.length - 1))
+      : svgWidth / 2; // Om det bara finns ett år, centrera punkten
+      
+    const y = svgHeight - paddingY - ((count / maxProjectsInAYear) * (svgHeight - paddingY * 2));
+    return { x, y, year, count };
+  });
+
+  // Skapa strängen för SVG-linjen (t.ex. "M 30 100 L 160 50 L 290 80")
+  const linePathD = chartPoints.reduce((path, pt, idx) => {
+    return idx === 0 ? `M ${pt.x} ${pt.y}` : `${path} L ${pt.x} ${pt.y}`;
+  }, "");
 
   // Separera aktiva och avklarade uppgifter baserat på den nya statusen
   const activeTasks = maintenanceTasks.filter(t => t.status === 'active');
@@ -530,24 +561,44 @@ function App() {
             </span>
           )}
 
-          {/* --- DROPDOWN-MENY ENLIGT SKÄRMDUMPEN --- */}
+          {/* --- DROPDOWN-MENY MED UTANFÖR-KLICK --- */}
           {showMaintenanceDropdown && (
-            <div 
-              onClick={(e) => e.stopPropagation()} // Hindrar menyn från att stängas om man råkar klicka inuti den
-              style={{
-                position: 'absolute',
-                top: '35px',
-                right: '0',
-                width: '280px',
-                backgroundColor: '#ffffff',
-                borderRadius: '16px',
-                boxShadow: '0 10px 25px rgba(0,0,0,0.15)',
-                border: '1px solid #e5e7eb',
-                zIndex: 2000,
-                cursor: 'default',
-                fontFamily: 'sans-serif'
-              }}
-            >
+            <>
+              {/* OSYNLIG BAKGRUNDSPLATTA SOM FÅNGAR KLICK UTANFÖR MENYN */}
+              <div 
+                onClick={(e) => {
+                  e.stopPropagation(); // Hindrar klicket från att bubbla
+                  setShowMaintenanceDropdown(false); // Stänger menyn!
+                }}
+                style={{
+                  position: 'fixed',
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
+                  zIndex: 1999, // Ligger precis under menyn (som har 2000)
+                  backgroundColor: 'transparent' // Helt osynlig
+                }}
+              />
+
+              {/* SJÄLVA MENYN */}
+              <div 
+                onClick={(e) => e.stopPropagation()} // Hindrar menyn från att stängas när man klickar INUTI den
+                style={{
+                  position: 'absolute',
+                  top: '35px',
+                  right: '0',
+                  width: '280px',
+                  backgroundColor: '#ffffff',
+                  borderRadius: '16px',
+                  boxShadow: '0 10px 25px rgba(0,0,0,0.15)',
+                  border: '1px solid #e5e7eb',
+                  zIndex: 2000, // Ligger ovanför bakgrundsplattan
+                  cursor: 'default',
+                  fontFamily: 'sans-serif'
+                }}
+              >
+
               {/* Header i menyn */}
               <div style={{ padding: '16px', borderBottom: '1px solid #f3f4f6' }}>
                 <div style={{ fontWeight: 'bold', fontSize: '16px', color: '#1f2937' }}>Underhållsuppgifter</div>
@@ -567,7 +618,7 @@ function App() {
   ✓
 </div>
                         <div style={{ fontSize: '14px', fontWeight: '500', color: '#374151' }}>{task.name}</div>
-                        <div style={{ fontSize: '11px', color: '#6b7280' }}>Deadline: {task.deadline}</div>
+                        <div style={{ fontSize: '11px', color: '#6b7280' }}>{task.dueDate}</div>
                       </div>
                   ))
                 ) : (
@@ -591,7 +642,7 @@ function App() {
 </div>
                       <div>
                         <div style={{ fontSize: '14px', fontWeight: '500', color: '#374151', textDecoration: 'line-through' }}>{task.name}</div>
-                        <div style={{ fontSize: '11px', color: '#6b7280' }}>Deadline: {task.deadline}</div>
+                        <div style={{ fontSize: '11px', color: '#6b7280' }}>{task.dueDate}</div>
                       </div>
                     </div>
                   ))
@@ -601,6 +652,7 @@ function App() {
               </div>
 
             </div>
+            </>
           )}
         </div>
       </div>
@@ -611,22 +663,98 @@ function App() {
         {/* --- SKÄRM 1: HOME (DASHBOARD) --- */}
         {currentTab === "home" && (
           <>
-            {/* METRICS (Flyttade hit in!) */}
-            <div style={{ backgroundColor: '#fff', padding: '20px', borderRadius: '16px', boxShadow: '0 2px 8px rgba(0,0,0,0.04)', marginBottom: '16px', border: '1px solid #E5E7EB' }}>
-              <span style={{ color: '#666', fontSize: '14px' }}>Antal Projekt</span>
-              <div style={{ fontSize: '32px', fontWeight: 'bold', margin: '8px 0' }}>{totalProjects}</div>
-              <div style={{ fontSize: '12px', color: '#888' }}>{yearStatsString}</div>
+            {/* LINJEDIAGRAM: ANTAL PROJEKT PER ÅR */}
+            <div style={{ backgroundColor: '#fff', padding: '20px', borderRadius: '16px', boxShadow: '0 2px 8px rgba(0,0,0,0.04)', marginBottom: '16px', border: '1px solid #E5E7EB', fontFamily: 'sans-serif' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                <span style={{ color: '#4b5563', fontSize: '14px', fontWeight: '600' }}>Projektutveckling</span>
+                <span style={{ backgroundColor: '#eff6ff', color: '#2563eb', padding: '2px 8px', borderRadius: '12px', fontSize: '12px', fontWeight: 'bold' }}>
+                  Totalt: {totalProjects} st
+                </span>
+              </div>
+
+              {sortedYearData.length > 0 ? (
+                <div style={{ width: '100%', overflow: 'hidden' }}>
+                  <svg viewBox={`0 0 ${svgWidth} ${svgHeight}`} style={{ width: '100%', height: 'auto', display: 'block' }}>
+                    {/* Bakgrundslinjer (Grid) */}
+                    <line x1={paddingX} y1={paddingY} x2={svgWidth - paddingX} y2={paddingY} stroke="#f3f4f6" strokeWidth={1} strokeDasharray="4" />
+                    <line x1={paddingX} y1={svgHeight - paddingY} x2={svgWidth - paddingX} y2={svgHeight - paddingY} stroke="#e5e7eb" strokeWidth={1} />
+
+                    {/* Själva diagramlinjen */}
+                    {linePathD && (
+                      <path
+                        d={linePathD}
+                        fill="none"
+                        stroke="#2563eb"
+                        strokeWidth={3}
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                    )}
+
+                    {/* Prickar och text för varje mätpunkt */}
+                    {chartPoints.map((pt, idx) => (
+                      <g key={idx}>
+                        {/* Cirkel på linjen */}
+                        <circle cx={pt.x} cy={pt.y} r={5} fill="#2563eb" stroke="#fff" strokeWidth={2} />
+                        
+                        {/* Siffra ovanför pricken (Antal projekt) */}
+                        <text
+                          x={pt.x}
+                          y={pt.y - 10}
+                          textAnchor="middle"
+                          style={{ fontSize: '11px', fontWeight: 'bold', fill: '#1f2937' }}
+                        >
+                          {pt.count}
+                        </text>
+
+                        {/* Årtal under Y-axeln */}
+                        <text
+                          x={pt.x}
+                          y={svgHeight - 4}
+                          textAnchor="middle"
+                          style={{ fontSize: '10px', fill: '#9ca3af', fontWeight: '500' }}
+                        >
+                          {pt.year}
+                        </text>
+                      </g>
+                    ))}
+                  </svg>
+                </div>
+              ) : (
+                <p style={{ color: '#9ca3af', fontSize: '14px', margin: '20px 0', textAlign: 'center', fontStyle: 'italic' }}>
+                  Inga projekt registrerade ännu.
+                </p>
+              )}
             </div>
 
-            <div style={{ display: 'flex', gap: '12px', marginBottom: '30px' }}>
-              <div style={{ backgroundColor: '#fff', padding: '16px', borderRadius: '16px', boxShadow: '0 2px 8px rgba(0,0,0,0.04)', flex: 1, border: '1px solid #E5E7EB' }}>
-                <span style={{ color: '#666', fontSize: '12px' }}>Total Investering</span>
-                <div style={{ fontSize: '16px', fontWeight: 'bold', marginTop: '8px' }}>{totalInvestment.toLocaleString()} kr</div>
+            {/* EKONOMIRUTOR MED MASKERING (PRIVACY MODE) */}
+            <div style={{ display: 'flex', gap: '12px', marginBottom: '30px', position: 'relative' }}>
+              
+              {/* RUTA: TOTAL INVESTERING */}
+              <div style={{ backgroundColor: '#fff', padding: '16px', borderRadius: '16px', boxShadow: '0 2px 8px rgba(0,0,0,0.04)', flex: 1, border: '1px solid #E5E7EB', position: 'relative' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ color: '#666', fontSize: '12px' }}>Total Investering</span>
+                  {/* Ögon-knapp (slår om båda rutorna samtidigt) */}
+                  <button 
+                    onClick={() => setShowFinancials(!showFinancials)}
+                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#9ca3af', padding: 0, display: 'flex', alignItems: 'center' }}
+                  >
+                    {showFinancials ? <EyeOff size={14} /> : <Eye size={14} />}
+                  </button>
+                </div>
+                <div style={{ fontSize: '16px', fontWeight: 'bold', marginTop: '8px' }}>
+                  {showFinancials ? `${totalInvestment.toLocaleString()} kr` : '••••• kr'}
+                </div>
               </div>
+
+              {/* RUTA: SPENDERAT I ÅR */}
               <div style={{ backgroundColor: '#fff', padding: '16px', borderRadius: '16px', boxShadow: '0 2px 8px rgba(0,0,0,0.04)', flex: 1, border: '1px solid #E5E7EB' }}>
                 <span style={{ color: '#666', fontSize: '12px' }}>Spenderat i år</span>
-                <div style={{ fontSize: '16px', fontWeight: 'bold', marginTop: '8px' }}>{spentThisYear.toLocaleString()} kr</div>
+                <div style={{ fontSize: '16px', fontWeight: 'bold', marginTop: '8px' }}>
+                  {showFinancials ? `${spentThisYear.toLocaleString()} kr` : '••••• kr'}
+                </div>
               </div>
+
             </div>
 
             {/* UPCOMING MAINTENANCE */}
