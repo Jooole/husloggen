@@ -42,6 +42,12 @@ function App() {
   const [projects, setProjects] = useState([]);
   const [maintenanceTasks, setMaintenanceTasks] = useState([]);
 
+  // Kollar om koden redan finns sparad i telefonens minne sedan tidigare
+  const [hasAccess, setHasAccess] = useState(() => {
+    return localStorage.getItem("husloggen_access") === "true";
+  });
+  const [pinCode, setPinCode] = useState(""); // Håller koden man skriver in
+
   // --- HÄMTA PROJEKT FRÅN FIRESTORE I REALTID ---
   useEffect(() => {
     const unsubscribe = onSnapshot(collection(db, "projects"), (snapshot) => {
@@ -86,10 +92,13 @@ function App() {
       // Vi bryr oss bara om uppgifter som är klara eller skippade
       if (task.status === 'active') return;
 
-      // Räkna ut nästa utsatta datum baserat på intervallet
-      let monthsToAdd = 12; // Standard för "Varje år"
+     // Räkna ut nästa utsatta datum baserat på intervallet
+      let monthsToAdd = 12; // Standard fallback
       if (task.interval === "Var 3e månad") monthsToAdd = 3;
       if (task.interval === "Var 6e månad") monthsToAdd = 6;
+      if (task.interval === "Varje år") monthsToAdd = 12;
+      if (task.interval === "Vart 3e år") monthsToAdd = 36; // 3 år * 12 månader
+      if (task.interval === "Vart 5e år") monthsToAdd = 60; // 5 år * 12 månader
 
       const nextDueDateStr = addMonths(task.dueDate, monthsToAdd);
       
@@ -185,6 +194,22 @@ function App() {
       });
     } catch (error) {
       console.error("Kunde inte uppdatera underhållsstatus:", error);
+    }
+  };
+
+  // --- FUNKTION FÖR ATT VERIFIERA KODEN ---
+  const handleVerifyCode = (e) => {
+    e.preventDefault();
+    
+    // HÄR BESTÄMMER DU ER HEMLIGA KOD! Byt ut "1234" mot vad ni vill ha
+    const hemligKod = "4002"; 
+
+    if (pinCode === hemligKod) {
+      localStorage.setItem("husloggen_access", "true"); // Spara i telefonens minne
+      setHasAccess(true); // Släpp in användaren
+    } else {
+      alert("Fel kod! Försök igen.");
+      setPinCode("");
     }
   };
 
@@ -420,11 +445,11 @@ function App() {
                       onChange={(e) => setNewRepeat(e.target.value)}
                       style={{ padding: '12px', borderRadius: '8px', border: '1px solid #d1d5db', fontSize: '16px', backgroundColor: '#fff' }}
                     >
-                      <option value="Varje vecka">Varje vecka</option>
-                      <option value="Varje månad">Varje månad</option>
                       <option value="Var 3e månad">Var 3e månad</option>
                       <option value="Var 6e månad">Var 6e månad</option>
                       <option value="Varje år">Varje år</option>
+                      <option value="Vart 3e år">Vart 3e år</option>
+                      <option value="Vart 5e år">Vart 5e år</option>
                     </select>
                   </div>
                 </>
@@ -529,6 +554,37 @@ function App() {
                 Spara
               </button>
             </div>
+          </form>
+        </div>
+      </div>
+    );
+  }
+
+  // --- LÅSSKÄRM OM MAN INTE HAR SKRIVIT KODEN ---
+  if (!hasAccess) {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', backgroundColor: '#f9f9f9', fontFamily: 'sans-serif', padding: '20px', boxSizing: 'border-box' }}>
+        <div style={{ backgroundColor: '#fff', padding: '30px 24px', borderRadius: '16px', boxShadow: '0 10px 25px rgba(0,0,0,0.05)', width: '100%', maxWidth: '340px', textAlign: 'center', border: '1px solid #e5e7eb' }}>
+          <div style={{ fontSize: '40px', marginBottom: '10px' }}>🏡</div>
+          <h2 style={{ margin: '0 0 8px 0', fontSize: '20px', fontWeight: 'bold', color: '#1f2937' }}>Välkommen till Husloggen</h2>
+          <p style={{ margin: '0 0 24px 0', fontSize: '14px', color: '#6b7280', lineHeight: '1.4' }}>Mata in er hemliga kod för att hantera projekt och underhåll.</p>
+          
+          <form onSubmit={handleVerifyCode} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            <input 
+              type="password" 
+              pattern="[0-9]*" // Gör att siffertangentbordet poppar upp på mobilen
+              inputMode="numeric"
+              placeholder="Ange kod..." 
+              value={pinCode}
+              onChange={(e) => setPinCode(e.target.value)}
+              style={{ padding: '14px', borderRadius: '8px', border: '1px solid #d1d5db', fontSize: '18px', textAlign: 'center', letterSpacing: '4px', outline: 'none' }}
+            />
+            <button 
+              type="submit"
+              style={{ backgroundColor: '#2563eb', color: '#fff', border: 'none', padding: '14px', borderRadius: '8px', fontSize: '16px', fontWeight: 'bold', cursor: 'pointer', boxShadow: '0 4px 6px rgba(37, 99, 235, 0.15)' }}
+            >
+              Lås upp
+            </button>
           </form>
         </div>
       </div>
