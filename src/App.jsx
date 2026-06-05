@@ -37,6 +37,9 @@ function App() {
   const [costRange, setCostRange] = useState([0, 100000]); // [min, max]
   const [activeCostFilter, setActiveCostFilter] = useState(null); // null betyder att filtret är inaktivt
 
+  const [projects, setProjects] = useState([]);
+  const [maintenanceTasks, setMaintenanceTasks] = useState([]);
+
   // --- HÄMTA PROJEKT FRÅN FIRESTORE I REALTID ---
   useEffect(() => {
     const unsubscribe = onSnapshot(collection(db, "projects"), (snapshot) => {
@@ -65,6 +68,63 @@ function App() {
     return () => unsubscribe();
   }, []);
 
+  // --- AUTOMATISK GENERATOR FÖR NÄSTA UNDERHÅLLSTILLFÄLLE ---
+  useEffect(() => {
+    // Om vi inte har laddat in några uppgifter än, gör inget
+    if (maintenanceTasks.length === 0) return;
+
+    // Funktion för att lägga till månader på ett datumsträng (YYYY-MM-DD)
+    const addMonths = (dateStr, months) => {
+      const d = new Date(dateStr);
+      d.setMonth(d.getMonth() + months);
+      return d.toISOString().split('T')[0];
+    };
+
+    maintenanceTasks.forEach(async (task) => {
+      // Vi bryr oss bara om uppgifter som är klara eller skippade
+      if (task.status === 'active') return;
+
+      // Räkna ut nästa utsatta datum baserat på intervallet
+      let monthsToAdd = 12; // Standard för "Varje år"
+      if (task.interval === "Var 3e månad") monthsToAdd = 3;
+      if (task.interval === "Var 6e månad") monthsToAdd = 6;
+
+      const nextDueDateStr = addMonths(task.dueDate, monthsToAdd);
+      
+      // Kolla om det är mindre än 1 månad kvar till nästa tillfälle
+      const today = new Date();
+      const nextDueDate = new Date(nextDueDateStr);
+      const oneMonthInMs = 30 * 24 * 60 * 60 * 1000;
+      
+      const isLessThanOneMonthKvar = (nextDueDate - today) <= oneMonthInMs;
+
+      if (isLessThanOneMonthKvar) {
+        // Kolla lokalt i minnet om vi REDAN har skapat en aktiv instans för detta datum
+        const redanSkapad = maintenanceTasks.some(t => 
+          t.name === task.name && 
+          t.dueDate === nextDueDateStr && 
+          t.status === 'active'
+        );
+
+        // Om den inte är skapad än – föd fram den i Firestore!
+        if (!redanSkapad) {
+          try {
+            await addDoc(collection(db, "maintenance"), {
+              name: task.name,
+              dueDate: nextDueDateStr, // Det nya framräknade datumet
+              interval: task.interval,
+              status: 'active', // Startar som ofärdigt
+              description: task.description || ""
+            });
+            console.log(`Födde fram ny instans av: ${task.name} till datumet ${nextDueDateStr}`);
+          } catch (err) {
+            console.error("Kunde inte föda fram nästa instans:", err);
+          }
+        }
+      }
+    });
+  }, [maintenanceTasks]);
+
   // --- FUNKTION FÖR ATT SPARA PROJEKTET ---
   const handleAddProject = (e) => {
     e.preventDefault();
@@ -78,8 +138,9 @@ function App() {
       // --- SPARA UNDERHÅLL I FIRESTORE ---
       addDoc(collection(db, "maintenance"), {
         name: newName,
-        deadline: newRepeat,
-        isCompleted: false,
+        dueDate: newDate, // Sparar det valda startdatumet (t.ex. "2026-06-05")
+        interval: newRepeat, // Sparar "Var 3e månad", "Var 6e månad" eller "Varje år"
+        status: 'active', // 'active', 'completed' eller 'skipped'
         description: newDescription
       });
       setCurrentTab("home");
@@ -104,21 +165,24 @@ function App() {
     setIsMaintenanceTask(false);
     setNewDescription("");
   };
-  
-  // 1. Projektlistan (startar tom, hämtas från Firebase)
-  const [projects, setProjects] = useState([]);
 
-  // 2. Underhållsuppgifterna (startar tom, hämtas från Firebase)
-  const [maintenanceTasks, setMaintenanceTasks] = useState([]);
+  // --- NY FUNKTION: SÄTT STATUS PÅ UNDERHÅLL ---
+  const setMaintenanceStatus = async (id, newStatus) => {
+    // Skapa en anpassad text beroende på om man valde Klart eller Skippa
+    const meddelande = newStatus === 'completed' 
+      ? "Vill du markera detta underhållsärende som klart?" 
+      : "Är du säker på att du vill skippa detta underhållstillfälle?";
 
-  // 3. NY FUNKTION: Den här körs när man klickar på checkboxen
-  const toggleMaintenanceTask = async (id) => {
-    const task = maintenanceTasks.find(t => t.id === id);
-    if (task) {
+    const isSure = window.confirm(meddelande);
+    if (!isSure) return; // Avbryt direkt om användaren klickar på "Avbryt"
+
+    try {
       const taskRef = doc(db, "maintenance", id);
       await updateDoc(taskRef, {
-        isCompleted: !task.isCompleted
+        status: newStatus
       });
+    } catch (error) {
+      console.error("Kunde inte uppdatera underhållsstatus:", error);
     }
   };
 
@@ -182,8 +246,8 @@ function App() {
   });
   const yearStatsString = Object.entries(projectsPerYear).sort((a, b) => b[0] - a[0]).map(([y, c]) => `${y}: ${c}`).join('  |  ');
 
-  // Separera aktiva och avklarade uppgifter så vi kan visa dem på rätt ställe
-  const activeTasks = maintenanceTasks.filter(t => !t.isCompleted);
+  // Separera aktiva och avklarade uppgifter baserat på den nya statusen
+  const activeTasks = maintenanceTasks.filter(t => t.status === 'active');
 
   // 1. Räkna ut dynamiskt maxvärde för kostnadsslidern baserat på dina projekt
   const maxProjectCost = projects.length > 0 ? Math.max(...projects.map(p => p.cost)) : 100000;
@@ -498,14 +562,13 @@ function App() {
                   activeTasks.map(task => (
                     <div key={task.id} style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '10px 0' }}>
                       <div 
-                        onClick={() => toggleMaintenanceTask(task.id)}
-                        style={{ width: '18px', height: '18px', borderRadius: '50%', border: '2px solid #9ca3af', cursor: 'pointer' }}
-                      />
-                      <div>
+  style={{ width: '18px', height: '18px', borderRadius: '50%', border: '2px solid #10b981', backgroundColor: '#10b981', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: '10px', cursor: 'default' }}
+>
+  ✓
+</div>
                         <div style={{ fontSize: '14px', fontWeight: '500', color: '#374151' }}>{task.name}</div>
                         <div style={{ fontSize: '11px', color: '#6b7280' }}>Deadline: {task.deadline}</div>
                       </div>
-                    </div>
                   ))
                 ) : (
                   <div style={{ fontSize: '13px', color: '#10b981', padding: '10px 0', fontWeight: '500' }}>🎉 Allt underhåll är klart!</div>
@@ -518,15 +581,14 @@ function App() {
               </div>
 
               <div style={{ padding: '8px 16px', maxHeight: '150px', overflowY: 'auto', borderRadius: '0 0 16px 16px' }}>
-                {maintenanceTasks.filter(t => t.isCompleted).length > 0 ? (
-                  maintenanceTasks.filter(t => t.isCompleted).map(task => (
+                {maintenanceTasks.filter(t => t.status === 'completed' || t.status === 'skipped').length > 0 ? (
+                 maintenanceTasks.filter(t => t.status === 'completed' || t.status === 'skipped').map(task => (
                     <div key={task.id} style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '10px 0', opacity: 0.5 }}>
                       <div 
-                        onClick={() => toggleMaintenanceTask(task.id)}
-                        style={{ width: '18px', height: '18px', borderRadius: '50%', border: '2px solid #10b981', backgroundColor: '#10b981', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: '10px', cursor: 'pointer' }}
-                      >
-                        ✓
-                      </div>
+  style={{ width: '18px', height: '18px', borderRadius: '50%', border: '2px solid #10b981', backgroundColor: '#10b981', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: '10px', cursor: 'default' }}
+>
+  ✓
+</div>
                       <div>
                         <div style={{ fontSize: '14px', fontWeight: '500', color: '#374151', textDecoration: 'line-through' }}>{task.name}</div>
                         <div style={{ fontSize: '11px', color: '#6b7280' }}>Deadline: {task.deadline}</div>
@@ -578,10 +640,10 @@ function App() {
                   <MaintenanceCard 
                     key={task.id}
                     name={task.name}
-                    deadline={task.deadline}
-                    icon={task.icon}
-                    isCompleted={task.isCompleted}
-                    onToggle={() => toggleMaintenanceTask(task.id)}
+                    interval={task.interval}
+                    dueDate={task.dueDate}
+                    status={task.status}
+                    onSetStatus={(newStatus) => setMaintenanceStatus(task.id, newStatus)}
                   />
                 ))
               ) : (

@@ -1,55 +1,77 @@
 import React from 'react';
-import { Check } from 'lucide-react'; // <-- HÄMTAR EN SNYGG VEKTORBOCK
+import { Check, X, Calendar } from 'lucide-react'; // Hämtar snygga ikoner från Lucide
 
-function MaintenanceCard({ name, deadline, isCompleted, onToggle }) { // <-- Tog bort "icon" härifrån
+function MaintenanceCard({ name, interval, dueDate, onSetStatus }) { 
   return (
     <div style={{
-      backgroundColor: isCompleted ? '#f3f4f6' : '#fffdf5', 
-      border: isCompleted ? '1px solid #e5e7eb' : '1px solid #fef3c7',
-      borderRadius: '16px',
+      backgroundColor: '#fff',
       padding: '16px',
+      borderRadius: '16px',
+      boxShadow: '0 2px 8px rgba(0,0,0,0.04)',
+      border: '1px solid #E5E7EB',
       marginBottom: '12px',
       display: 'flex',
+      justifyContent: 'space-between',
       alignItems: 'center',
-      gap: '16px',
-      boxShadow: isCompleted ? 'none' : '0 2px 4px rgba(0,0,0,0.02)',
-      opacity: isCompleted ? 0.6 : 1, 
-      transition: 'all 0.2s'
+      fontFamily: 'sans-serif'
     }}>
-      {/* CHECKBOX (Klickbar cirkel) */}
-      <div 
-        onClick={onToggle} 
-        style={{
-          width: '24px',
-          height: '24px',
-          borderRadius: '50%',
-          border: isCompleted ? '2px solid #10b981' : '2px solid #9ca3af',
-          backgroundColor: isCompleted ? '#10b981' : 'transparent',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          cursor: 'pointer',
-          color: '#fff',
-          transition: 'all 0.2s'
-        }}
-      >
-        {/* Riktig Lucide-ikon istället för din gamla text-bock! */}
-        {isCompleted && <Check size={14} strokeWidth={3} />} 
+      {/* VÄNSTERSIDA: TEXT OCH DATUM */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+        <h4 style={{ margin: 0, fontSize: '15px', fontWeight: '600', color: '#1f2937' }}>
+          {name}
+        </h4>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#6b7280', fontSize: '12px' }}>
+          <Calendar size={13} />
+          <span>Ska göras: {dueDate || interval}</span>
+        </div>
       </div>
 
-      {/* TEXT (Ikonen är nu helt raderad härifrån, så texten flyttar automatiskt till vänster) */}
-      <div style={{ flex: 1 }}>
-        <div style={{ 
-          fontWeight: '600', 
-          fontSize: '16px',
-          textDecoration: isCompleted ? 'line-through' : 'none', 
-          color: isCompleted ? '#6b7280' : '#1f2937'
-        }}>
-          {name}
-        </div>
-        <div style={{ fontSize: '12px', color: '#6b7280', marginTop: '2px' }}>
-          Deadline: {deadline}
-        </div>
+      {/* HÖGERSIDA: DINA TVÅ NYA ACTIONS */}
+      <div style={{ display: 'flex', gap: '8px' }}>
+        {/* KNAPP: SKIPPA */}
+        <button
+          onClick={() => onSetStatus('skipped')}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '4px',
+            backgroundColor: '#fff',
+            color: '#ef4444',
+            border: '1px solid #fca5a5',
+            padding: '6px 12px',
+            borderRadius: '20px',
+            fontSize: '12px',
+            fontWeight: '600',
+            cursor: 'pointer',
+            transition: 'all 0.2s'
+          }}
+        >
+          <X size={14} />
+          Skippa
+        </button>
+
+        {/* KNAPP: KLART */}
+        <button
+          onClick={() => onSetStatus('completed')}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '4px',
+            backgroundColor: '#10b981',
+            color: '#fff',
+            border: 'none',
+            padding: '6px 12px',
+            borderRadius: '20px',
+            fontSize: '12px',
+            fontWeight: '600',
+            cursor: 'pointer',
+            boxShadow: '0 2px 4px rgba(16, 185, 129, 0.2)',
+            transition: 'all 0.2s'
+          }}
+        >
+          <Check size={14} />
+          Klart
+        </button>
       </div>
     </div>
   );
