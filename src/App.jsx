@@ -3,7 +3,7 @@ import ProjectCard from './ProjectCard';
 import MaintenanceCard from './MaintenanceCard'; // HÄMTAR NYA KOMPONENTEN!
 import { Bell, Home, FileText, Plus, AlertTriangle } from 'lucide-react';
 import { db } from './firebase'; // Hämtar din config!
-import { collection, onSnapshot, addDoc, doc, updateDoc } from 'firebase/firestore'; // Hämtar Firestore-metoder!
+import { collection, onSnapshot, addDoc, doc, updateDoc, deleteDoc } from 'firebase/firestore'; // Hämtar Firestore-metoder!
 
 function App() {
   // Kan vara "home", "log" eller "new"
@@ -145,6 +145,27 @@ function App() {
     } catch (error) {
       console.error("Fel vid uppdatering:", error);
       alert("Kunde inte spara ändringarna.");
+    }
+  };
+
+  // --- FUNKTION FÖR ATT RADERA ETT PROJEKT ---
+  const handleDeleteProject = async (projectId) => {
+    const isSure = window.confirm("Är du säker på att du vill ta bort detta projekt? Detta går inte att ångra.");
+    if (!isSure) return;
+
+    try {
+      // Radera dokumentet i Firestore
+      await deleteDoc(doc(db, "projects", projectId));
+      
+      // Stäng modalen direkt efter radering
+      setIsModalActive(false);
+      setTimeout(() => {
+        setSelectedProject(null);
+        setModalOrigin(null);
+      }, 250);
+    } catch (error) {
+      console.error("Fel vid radering:", error);
+      alert("Kunde inte ta bort projektet.");
     }
   };
 
@@ -1058,13 +1079,10 @@ function App() {
                 ) : (
                   <>
                     <button 
-                      onClick={() => {
-                        setIsModalActive(false);
-                        setTimeout(() => { setSelectedProject(null); setModalOrigin(null); }, 250);
-                      }}
-                      style={{ flex: 1, padding: '10px', borderRadius: '8px', border: '1px solid #d1d5db', backgroundColor: '#fff', color: '#4b5563', fontSize: '14px', fontWeight: 'bold', cursor: 'pointer' }}
+                      onClick={() => handleDeleteProject(selectedProject.id)}
+                      style={{ flex: 1, padding: '10px', borderRadius: '8px', border: '1px solid #ef4444', backgroundColor: '#fff', color: '#ef4444', fontSize: '14px', fontWeight: 'bold', cursor: 'pointer' }}
                     >
-                      Stäng
+                      Ta bort
                     </button>
                     <button 
                       onClick={() => setIsEditing(true)}
