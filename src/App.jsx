@@ -91,6 +91,7 @@ function App() {
     maintenanceTasks.forEach(async (task) => {
       // Vi bryr oss bara om uppgifter som är klara eller skippade
       if (task.status === 'active') return;
+      if (task.interval === "Repetera inte") return;
 
      // Räkna ut nästa utsatta datum baserat på intervallet
       let monthsToAdd = 12; // Standard fallback
@@ -201,7 +202,8 @@ function App() {
   const handleVerifyCode = (e) => {
     e.preventDefault();
     
-    // HÄR BESTÄMMER DU ER HEMLIGA KOD! Byt ut "1234" mot vad ni vill ha
+    // HÄR BESTÄMMER DU ER HEMLIGA KOD! Den behövs för att komma åt appen. 
+    // När man skrivit in koden sparas den lokalt i webbläsaren och behöver inte anges nästa gång
     const hemligKod = "4002"; 
 
     if (pinCode === hemligKod) {
@@ -390,7 +392,7 @@ function App() {
                   marginBottom: '10px'
                 }}
               >
-                <span style={{ fontSize: '15px', fontWeight: '600', color: '#374151' }}>Underhållsärende</span>
+                <span style={{ fontSize: '15px', fontWeight: '600', color: '#374151' }}>Mindre syssla</span>
                 <div style={{
                   width: '44px',
                   height: '24px',
@@ -445,6 +447,7 @@ function App() {
                       onChange={(e) => setNewRepeat(e.target.value)}
                       style={{ padding: '12px', borderRadius: '8px', border: '1px solid #d1d5db', fontSize: '16px', backgroundColor: '#fff' }}
                     >
+                      <option value="Repetera inte">Repetera inte</option>
                       <option value="Var 3e månad">Var 3e månad</option>
                       <option value="Var 6e månad">Var 6e månad</option>
                       <option value="Varje år">Varje år</option>
@@ -657,7 +660,7 @@ function App() {
 
               {/* Header i menyn */}
               <div style={{ padding: '16px', borderBottom: '1px solid #f3f4f6' }}>
-                <div style={{ fontWeight: 'bold', fontSize: '16px', color: '#1f2937' }}>Underhållsuppgifter</div>
+                <div style={{ fontWeight: 'bold', fontSize: '16px', color: '#1f2937' }}>Mindre sysslor</div>
                 <div style={{ fontSize: '13px', color: '#6b7280', marginTop: '2px' }}>
                   {activeTasks.length} kvar att göra
                 </div>
@@ -813,10 +816,10 @@ function App() {
 
             </div>
 
-            {/* UPCOMING MAINTENANCE */}
+            {/* Sysslor */}
             <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '12px', color: '#666' }}>
               <AlertTriangle size={14} style={{ color: '#d97706' }} />
-              <p style={{ color: '#666', textTransform: 'uppercase', fontSize: '12px', fontWeight: 'bold', letterSpacing: '1px', margin: 0 }}>Kommande underhåll</p>
+              <p style={{ color: '#666', textTransform: 'uppercase', fontSize: '12px', fontWeight: 'bold', letterSpacing: '1px', margin: 0 }}>Sysslor</p>
             </div>
             <div style={{ marginBottom: '30px' }}>
               {activeTasks.length > 0 ? (

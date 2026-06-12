@@ -1,7 +1,10 @@
 import React from 'react';
-import { Check, X, Calendar } from 'lucide-react'; // Hämtar snygga ikoner från Lucide
+import { Check, X, Calendar, Ribbon } from 'lucide-react';
 
 function MaintenanceCard({ name, interval, deadline, dueDate, onSetStatus }) { 
+  const nuvarandeInterval = interval || deadline;
+  const VisaIntervallText = nuvarandeInterval === "Repetera inte" ? "Engångssyssla" : `Ska göras: ${dueDate || nuvarandeInterval}`;
+
   return (
     <div style={{
       backgroundColor: '#fff',
@@ -16,19 +19,18 @@ function MaintenanceCard({ name, interval, deadline, dueDate, onSetStatus }) {
       fontFamily: 'sans-serif'
     }}>
       {/* VÄNSTERSIDA: TEXT OCH DATUM */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', marginRight:'8px' }}>
         <h4 style={{ margin: 0, fontSize: '15px', fontWeight: '600', color: '#1f2937' }}>
           {name}
         </h4>
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#6b7280', fontSize: '12px' }}>
           <Calendar size={13} />
-          <span>{dueDate || interval || deadline || "Ej angivet"}</span>
+          <span>{VisaIntervallText}</span>
         </div>
       </div>
 
-      {/* HÖGERSIDA: DINA TVÅ NYA ACTIONS */}
+      {/* HÖGERSIDA: ACTIONS */}
       <div style={{ display: 'flex', gap: '8px' }}>
-        {/* KNAPP: SKIPPA */}
         <button
           onClick={() => onSetStatus('skipped')}
           style={{
@@ -50,7 +52,6 @@ function MaintenanceCard({ name, interval, deadline, dueDate, onSetStatus }) {
           Skippa
         </button>
 
-        {/* KNAPP: KLART */}
         <button
           onClick={() => onSetStatus('completed')}
           style={{
