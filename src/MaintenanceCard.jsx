@@ -1,25 +1,30 @@
 import React from 'react';
-import { Check, X, Calendar, Ribbon } from 'lucide-react';
+import { Check, X, Calendar } from 'lucide-react';
 
-function MaintenanceCard({ name, interval, deadline, dueDate, onSetStatus }) { 
+// Lägg till onClick i propsen högst upp
+function MaintenanceCard({ name, interval, deadline, dueDate, onSetStatus, onClick }) { 
   const nuvarandeInterval = interval || deadline;
   const VisaIntervallText = nuvarandeInterval === "Repetera inte" ? "Engångssyssla" : `Ska göras: ${dueDate || nuvarandeInterval}`;
 
   return (
-    <div style={{
-      backgroundColor: '#fff',
-      padding: '16px',
-      borderRadius: '16px',
-      boxShadow: '0 2px 8px rgba(0,0,0,0.04)',
-      border: '1px solid #E5E7EB',
-      marginBottom: '12px',
-      display: 'flex',
-      justifyContent: 'space-between',
-      alignItems: 'center',
-      fontFamily: 'sans-serif'
-    }}>
+    <div 
+      onClick={onClick} // <-- GÖR HELA KORTET KLICKBART!
+      style={{
+        backgroundColor: '#fff',
+        padding: '16px',
+        borderRadius: '16px',
+        boxShadow: '0 2px 8px rgba(0,0,0,0.04)',
+        border: '1px solid #E5E7EB',
+        marginBottom: '12px',
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        fontFamily: 'sans-serif',
+        cursor: 'pointer' // <-- Ändra till pekfinger så man fattar att det går att klicka
+      }}
+    >
       {/* VÄNSTERSIDA: TEXT OCH DATUM */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', marginRight:'8px' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
         <h4 style={{ margin: 0, fontSize: '15px', fontWeight: '600', color: '#1f2937' }}>
           {name}
         </h4>
@@ -32,7 +37,10 @@ function MaintenanceCard({ name, interval, deadline, dueDate, onSetStatus }) {
       {/* HÖGERSIDA: ACTIONS */}
       <div style={{ display: 'flex', gap: '8px' }}>
         <button
-          onClick={() => onSetStatus('skipped')}
+          onClick={(e) => {
+            e.stopPropagation(); // <-- VIKTIGT! Hindrar modalen från och öppnas
+            onSetStatus('skipped');
+          }}
           style={{
             display: 'flex',
             alignItems: 'center',
@@ -53,7 +61,10 @@ function MaintenanceCard({ name, interval, deadline, dueDate, onSetStatus }) {
         </button>
 
         <button
-          onClick={() => onSetStatus('completed')}
+          onClick={(e) => {
+            e.stopPropagation(); // <-- VIKTIGT! Hindrar modalen från och öppnas
+            onSetStatus('completed');
+          }}
           style={{
             display: 'flex',
             alignItems: 'center',

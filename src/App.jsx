@@ -13,6 +13,7 @@ function App() {
   const [modalOrigin, setModalOrigin] = useState(null); // Sparar { top, left, width, height } för kortet du klickade på
   const [isEditing, setIsEditing] = useState(false); // Håller koll på om vi är i redigeringsläge
   const [editFields, setEditFields] = useState({ name: "", cost: "", date: "", category: "", description: "" }); // Håller temporär data under redigeringen
+  const [isModalTask, setIsModalTask] = useState(false);
 
   // Håller koll på om underhållsmenyn i headern är öppen
   const [showMaintenanceDropdown, setShowMaintenanceDropdown] = useState(false);
@@ -215,42 +216,61 @@ function App() {
     }
   };
 
-  // --- FUNKTION FÖR ATT UPPDATERA ETT BEFINTLIGT PROJEKT ---
+  // --- FUNKTION FÖR ATT UPPDATERA ETT BEFINTLIGT PROJEKT / SYSSELA ---
   const handleUpdateProject = async () => {
-    if (!editFields.name || !editFields.date) {
-      alert("Titel och datum får inte vara tomma!");
+    if (!editFields.name) {
+      alert("Titel får inte vara tom!");
       return;
     }
 
     try {
-      const projectRef = doc(db, "projects", selectedProject.id);
-      await updateDoc(projectRef, {
-        name: editFields.name,
-        cost: Number(editFields.cost) || 0,
-        date: editFields.date,
-        category: editFields.category,
-        description: editFields.description
-      });
+      if (isModalTask) {
+        // --- UPPDATERA SYSSELA I FIRESTORE ---
+        const taskRef = doc(db, "maintenance", selectedProject.id);
+        await updateDoc(taskRef, {
+          name: editFields.name,
+          dueDate: editFields.date,
+          description: editFields.description
+        });
+      } else {
+        // --- UPPDATERA VANLIGT PROJEKT I FIRESTORE ---
+        const projectRef = doc(db, "projects", selectedProject.id);
+        await updateDoc(projectRef, {
+          name: editFields.name,
+          cost: Number(editFields.cost) || 0,
+          date: editFields.date,
+          category: editFields.category,
+          description: editFields.description
+        });
+      }
       
-      // Stäng redigeringsläget och uppdatera modalens visningstext
       setIsEditing(false);
       setSelectedProject({ id: selectedProject.id, ...editFields, cost: Number(editFields.cost) || 0 });
     } catch (error) {
-      console.error("Fel vid uppdatering:", error);
+      console.error("Fel vi uppdatering:", error);
       alert("Kunde inte spara ändringarna.");
     }
   };
 
   // --- FUNKTION FÖR ATT RADERA ETT PROJEKT ---
+  // --- FUNKTION FÖR ATT RADERA ETT PROJEKT / SYSSELA ---
   const handleDeleteProject = async (projectId) => {
-    const isSure = window.confirm("Är du säker på att du vill ta bort detta projekt? Detta går inte att ångra.");
+    const meddelande = isModalTask 
+      ? "Är du säker på att du vill ta bort denna syssla? Detta går inte att ångra."
+      : "Är du säker på att du vill ta bort detta projekt? Detta går inte att ångra.";
+
+    const isSure = window.confirm(meddelande);
     if (!isSure) return;
 
     try {
-      // Radera dokumentet i Firestore
-      await deleteDoc(doc(db, "projects", projectId));
+      if (isModalTask) {
+        // Radera från underhåll/sysslor
+        await deleteDoc(doc(db, "maintenance", projectId));
+      } else {
+        // Radera från vanliga projekt
+        await deleteDoc(doc(db, "projects", projectId));
+      }
       
-      // Stäng modalen direkt efter radering
       setIsModalActive(false);
       setTimeout(() => {
         setSelectedProject(null);
@@ -258,7 +278,7 @@ function App() {
       }, 250);
     } catch (error) {
       console.error("Fel vid radering:", error);
-      alert("Kunde inte ta bort projektet.");
+      alert("Kunde inte ta bort dokumentet.");
     }
   };
 
@@ -828,13 +848,32 @@ function App() {
                     key={task.id}
                     name={task.name}
                     interval={task.interval}
+                    deadline={task.deadline}
                     dueDate={task.dueDate}
                     status={task.status}
                     onSetStatus={(newStatus) => setMaintenanceStatus(task.id, newStatus)}
+                    onClick={(e) => {
+                      const rect = e.currentTarget.getBoundingClientRect();
+                      setModalOrigin({ top: rect.top, left: rect.left, width: rect.width, height: rect.height });
+                      
+                      // Ladda in sysslans nuvarande värden i redigeringsfälten
+                      setEditFields({
+                        name: task.name,
+                        cost: 0, // Sysslor har ingen kostnad
+                        date: task.dueDate || "",
+                        category: "Mindre syssla", // Visas som etikett högst upp i modalen
+                        description: task.description || ""
+                      });
+                      
+                      setIsModalTask(true); // <-- Berätta för appen att detta är en syssla!
+                      setIsEditing(false); 
+                      setSelectedProject(task); // Vi lånar detta state för att hålla datan
+                      setTimeout(() => setIsModalActive(true), 20);
+                    }}
                   />
                 ))
               ) : (
-                <p style={{ color: '#10b981', fontSize: '14px', fontWeight: '500' }}>🎉 Allt underhåll är klart!</p>
+                <p style={{ color: '#10b981', fontSize: '14px', fontWeight: '500' }}>🎉 Alla sysslor är klara!</p>
               )}
             </div>
           </>
@@ -1135,6 +1174,7 @@ function App() {
         <div 
           onClick={() => {
             setIsModalActive(false);
+            setIsModalTask(false);
             setTimeout(() => {
               setSelectedProject(null);
               setModalOrigin(null);
@@ -1180,6 +1220,7 @@ function App() {
             <button 
               onClick={() => {
                 setIsModalActive(false);
+                setIsModalTask(false);
                 setTimeout(() => {
                   setSelectedProject(null);
                   setModalOrigin(null);
@@ -1208,20 +1249,23 @@ function App() {
               {isEditing ? (
                 /* --- HÄR VISAS INPUTS OM VI REDIGERAR --- */
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', overflowY: 'auto', paddingRight: '4px' }}>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                    <label style={{ fontSize: '11px', fontWeight: 'bold', color: '#6b7280' }}>Kategori</label>
-                    <select 
-                      value={editFields.category}
-                      onChange={(e) => setEditFields({ ...editFields, category: e.target.value })}
-                      style={{ padding: '8px', borderRadius: '8px', border: '1px solid #d1d5db', fontSize: '14px', backgroundColor: '#fff' }}
-                    >
-                      <option value="Renovering">Renovering</option>
-                      <option value="Nybyggnation">Nybyggnation</option>
-                      <option value="Trädgård">Trädgård</option>
-                      <option value="Mindre fix">Mindre fix</option>
-                      <option value="Annat">Annat</option>
-                    </select>
-                  </div>
+                  {/* KATEGORI (Visas endast för vanliga projekt) */}
+                  {!isModalTask && (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                      <label style={{ fontSize: '11px', fontWeight: 'bold', color: '#6b7280' }}>Kategori</label>
+                      <select 
+                        value={editFields.category}
+                        onChange={(e) => setEditFields({ ...editFields, category: e.target.value })}
+                        style={{ padding: '8px', borderRadius: '8px', border: '1px solid #d1d5db', fontSize: '14px', backgroundColor: '#fff' }}
+                      >
+                        <option value="Renovering">Renovering</option>
+                        <option value="Nybyggnation">Nybyggnation</option>
+                        <option value="Trädgård">Trädgård</option>
+                        <option value="Mindre fix">Mindre fix</option>
+                        <option value="Annat">Annat</option>
+                      </select>
+                    </div>
+                  )}
 
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                     <label style={{ fontSize: '11px', fontWeight: 'bold', color: '#6b7280' }}>Namn</label>
@@ -1243,15 +1287,19 @@ function App() {
                         style={{ padding: '8px', borderRadius: '8px', border: '1px solid #d1d5db', fontSize: '14px', fontFamily: 'sans-serif' }}
                       />
                     </div>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', flex: 1 }}>
-                      <label style={{ fontSize: '11px', fontWeight: 'bold', color: '#6b7280' }}>Kostnad (kr)</label>
-                      <input 
-                        type="number"
-                        value={editFields.cost}
-                        onChange={(e) => setEditFields({ ...editFields, cost: e.target.value })}
-                        style={{ padding: '8px', borderRadius: '8px', border: '1px solid #d1d5db', fontSize: '14px' }}
-                      />
-                    </div>
+                    
+                    {/* KOSTNAD (Visas endast för vanliga projekt) */}
+                    {!isModalTask && (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', flex: 1 }}>
+                        <label style={{ fontSize: '11px', fontWeight: 'bold', color: '#6b7280' }}>Kostnad (kr)</label>
+                        <input 
+                          type="number"
+                          value={editFields.cost}
+                          onChange={(e) => setEditFields({ ...editFields, cost: e.target.value })}
+                          style={{ padding: '8px', borderRadius: '8px', border: '1px solid #d1d5db', fontSize: '14px' }}
+                        />
+                      </div>
+                    )}
                   </div>
 
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
@@ -1268,26 +1316,30 @@ function App() {
                 /* --- HÄR VISAS DEN VANLIGA TEXTEN SOM VANLIGT --- */
                 <>
                   <div>
-                    <span style={{ fontSize: '11px', fontWeight: 'bold', textTransform: 'uppercase', color: '#2563eb', letterSpacing: '0.5px' }}>
-                      {selectedProject.category || 'Projekt'}
-                    </span>
-                    <h3 style={{ fontSize: '20px', fontWeight: 'bold', margin: '4px 0 0 0', color: '#1f2937', paddingRight: '20px' }}>
-                      {selectedProject.name}
-                    </h3>
-                  </div>
+                <span style={{ fontSize: '11px', fontWeight: 'bold', textTransform: 'uppercase', color: '#2563eb', letterSpacing: '0.5px' }}>
+                  {isModalTask ? 'Mindre syssla' : (selectedProject.category || 'Projekt')}
+                </span>
+                <h3 style={{ fontSize: '20px', fontWeight: 'bold', margin: '4px 0 0 0', color: '#1f2937', paddingRight: '20px' }}>
+                  {selectedProject.name}
+                </h3>
+              </div>
 
                   <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1px solid #f3f4f6', borderBottom: '1px solid #f3f4f6', padding: '10px 0' }}>
-                    <div>
-                      <span style={{ fontSize: '11px', color: '#6b7280' }}>Datum</span>
-                      <div style={{ fontSize: '14px', fontWeight: '500', color: '#374151' }}>{selectedProject.date}</div>
-                    </div>
-                    <div style={{ textAlign: 'right' }}>
-                      <span style={{ fontSize: '11px', color: '#6b7280' }}>Kostnad</span>
-                      <div style={{ fontSize: '14px', fontWeight: 'bold', color: '#10b981' }}>
-                        {(selectedProject.cost || 0).toLocaleString()} kr
-                      </div>
+                <div>
+                  <span style={{ fontSize: '11px', color: '#6b7280' }}>Datum</span>
+                  <div style={{ fontSize: '14px', fontWeight: '500', color: '#374151' }}>{selectedProject.date}</div>
+                </div>
+                
+                {/* KOSTNAD (Visas ENBART om det INTE är en syssla) */}
+                {!isModalTask && (
+                  <div style={{ textAlign: 'right' }}>
+                    <span style={{ fontSize: '11px', color: '#6b7280' }}>Kostnad</span>
+                    <div style={{ fontSize: '14px', fontWeight: 'bold', color: '#10b981' }}>
+                      {(selectedProject.cost || 0).toLocaleString()} kr
                     </div>
                   </div>
+                )}
+              </div>
 
                   <div style={{ flex: 1, minHeight: 0 }}>
                     <span style={{ fontSize: '11px', color: '#6b7280', fontWeight: '600' }}>Beskrivning</span>
